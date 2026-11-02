@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#111214">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Goud Fib">
+<title>Goud Fibonacci</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #111214; --surface: #1a1c20; --surface-2: #23262b; --line: #2e3238;
+    --text: #eceef1; --muted: #9aa1ab; --gold: #e8b64c; --gold-soft: rgba(232,182,76,.14);
+    --buy: #22c55e; --buy-soft: rgba(34,197,94,.13); --sell: #ef4444; --sell-soft: rgba(239,68,68,.13);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 16px; }
+  header { padding: calc(14px + env(safe-area-inset-top)) 0 10px; position: sticky; top: 0; z-index: 5;
+    background: linear-gradient(var(--bg) 85%, transparent); }
+  .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  h1 span { color: var(--gold); }
+  .price { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .sub { color: var(--muted); font-size: 13px; display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+  .chg.up { color: var(--buy); } .chg.down { color: var(--sell); }
+  .pill { display: inline-block; padding: 1px 9px; border-radius: 99px; font-size: 12px; font-weight: 600;
+    background: var(--surface-2); color: var(--muted); }
+  .pill.up { background: var(--buy-soft); color: var(--buy); }
+  .pill.down { background: var(--sell-soft); color: var(--sell); }
+  .seg { display: flex; background: var(--surface); border-radius: 11px; padding: 3px; margin-top: 12px; }
+  .seg button { flex: 1; border: 0; background: none; color: var(--muted); font: inherit; font-weight: 600;
+    padding: 7px 0; border-radius: 8px; cursor: pointer; }
+  .seg button.on { background: var(--surface-2); color: var(--gold); }
+  .card { background: var(--surface); border-radius: var(--radius); padding: 16px; margin: 12px 0; }
+  .card h2 { margin: 0 0 10px; font-size: 15px; font-weight: 650; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .signal.buy { background: linear-gradient(160deg, var(--buy-soft), var(--surface) 60%); }
+  .signal.sell { background: linear-gradient(160deg, var(--sell-soft), var(--surface) 60%); }
+  .sig-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .sig-dir { font-size: 24px; font-weight: 800; letter-spacing: .5px; }
+  .buy .sig-dir { color: var(--buy); } .sell .sig-dir { color: var(--sell); }
+  .score { text-align: right; }
+  .score b { font-size: 22px; color: var(--gold); }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .kv { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+  .kv .k { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .kv .v { font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .kv.sl .v { color: var(--sell); } .kv.tp .v { color: var(--buy); }
+  .why { margin: 12px 0 0; padding-left: 18px; }
+  .why li { margin: 3px 0; }
+  .zone { font-size: 20px; font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
+  #chart { height: 380px; margin: 0 -8px; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .row { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+  .row-top { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+  .row .b { color: var(--buy); } .row .s { color: var(--sell); }
+  .row details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .r-pos { color: var(--buy); } .r-neg { color: var(--sell); }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  svg.eq { width: 100%; height: 150px; display: block; margin-top: 12px; }
+  label.f { display: block; margin: 12px 0 0; font-size: 13px; color: var(--muted); }
+  label.f input, label.f select { display: block; width: 100%; margin-top: 4px; padding: 10px 12px; font: inherit;
+    color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
+  label.f input[type=range] { padding: 0; accent-color: var(--gold); border: 0; background: none; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  .btn { display: block; width: 100%; margin-top: 14px; padding: 12px; font: inherit; font-weight: 650; border: 0;
+    border-radius: 11px; background: var(--gold); color: #1a1405; cursor: pointer; }
+  .btn.ghost { background: var(--surface-2); color: var(--text); }
+  .warn { font-size: 12.5px; color: var(--muted); border-left: 3px solid var(--gold); padding: 6px 10px; margin: 12px 0; }
+  .err { background: var(--sell-soft); color: #fecaca; }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: rgba(17,18,20,.94);
+    backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+  nav .wrap { display: flex; }
+  nav button { flex: 1; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11.5px;
+    padding: 9px 0 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  nav button svg { width: 22px; height: 22px; }
+  nav button.on { color: var(--gold); }
+  .tab { display: none; } .tab.on { display: block; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--gold);
+    border-radius: 50%; animation: s 0.8s linear infinite; vertical-align: -2px; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  ol.info li { margin: 6px 0; }
+  .btn.win { background: var(--buy); color: #04170b; }
+  .btn.loss { background: var(--sell); color: #fff; }
+  .toggle { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+  .toggle input { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--gold); flex: none; }
+  .meter { margin-top: 14px; }
+  .meter-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .meter-top b { font-variant-numeric: tabular-nums; }
+  .bar { height: 10px; background: var(--surface-2); border-radius: 99px; overflow: hidden; margin-top: 5px; }
+  .bar i { display: block; height: 100%; border-radius: 99px; }
+  .alert { border-radius: 10px; padding: 10px 12px; font-weight: 600; font-size: 14px; }
+  .alert.ok { background: var(--buy-soft); color: var(--buy); }
+  .alert.warn2 { background: var(--gold-soft); color: var(--gold); }
+  .alert.bad { background: var(--sell-soft); color: #fca5a5; }
+  .strip { display: block; width: 100%; text-align: left; font: inherit; color: var(--text); border: 0; cursor: pointer; }
+  .x { border: 0; background: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 0 4px; }
+  @media (max-width: 380px) { .grid, .kpis { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="top">
+      <h1><span>●</span> Goud XAU/USD</h1>
+      <span id="trend" class="pill">…</span>
+    </div>
+    <div class="price" id="price">–</div>
+    <div class="sub"><span id="chg" class="chg"></span><span id="updated"><span class="spin"></span> laden…</span></div>
+    <div class="seg" id="tfs">
+      <button data-tf="15m">15m</button><button data-tf="1H">1H</button>
+      <button data-tf="4H">4H</button><button data-tf="1D">1D</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="tab on" id="tab-signal">
+    <div id="fd-strip"></div>
+    <div id="signal"></div>
+    <div class="card">
+      <div id="chart"></div>
+      <div class="legend">
+        <span><i style="background:#60a5fa"></i>EMA50</span>
+        <span><i style="background:#c084fc"></i>EMA200</span>
+        <span><i style="background:var(--gold)"></i>Golden zone 50–61,8%</span>
+        <span>▲▼ signalen</span>
+      </div>
+    </div>
+    <p class="warn">Geen financieel advies. Alleen voor educatieve doeleinden. Handelen met hefboom is zeer risicovol: test eerst op een demo-account.</p>
+  </section>
+
+  <section class="tab" id="tab-funded">
+    <div class="card">
+      <label class="toggle"><input type="checkbox" id="fd-on"> <span><b>Funded-modus aan</b><br>
+        <span class="muted small">De positiegrootte bij een signaal houdt dan rekening met je challenge-regels.</span></span></label>
+    </div>
+    <div id="fd-status"></div>
+    <div class="card">
+      <h2>Trade invoeren</h2>
+      <p class="muted small" style="margin:0">Vul na elke gesloten trade het resultaat in dollar in, zoals je broker het toont.</p>
+      <label class="f">Resultaat ($)<input type="number" id="fd-amount" min="0" step="0.01" inputmode="decimal" placeholder="bv. 120"></label>
+      <div class="two">
+        <button class="btn win" id="fd-win">+ Winst</button>
+        <button class="btn loss" id="fd-loss">− Verlies</button>
+      </div>
+      <div class="list" id="fd-log" style="margin-top:14px"></div>
+    </div>
+    <div class="card">
+      <h2>Regels van je challenge</h2>
+      <p class="muted small" style="margin:0">Neem deze over van je prop firm. Verlieslimieten worden berekend op je startbedrag; de daglimiet geldt vanaf je saldo bij het begin van de dag.</p>
+      <label class="f">Startbedrag account ($)<input type="number" id="fd-size" min="100" step="1000" inputmode="decimal"></label>
+      <div class="two">
+        <label class="f">Winstdoel (%)<input type="number" id="fd-target" min="0" max="100" step="0.5" inputmode="decimal"></label>
+        <label class="f">Risico per trade (%)<input type="number" id="fd-risk" min="0.1" max="5" step="0.25" inputmode="decimal"></label>
+        <label class="f">Max. verlies per dag (%)<input type="number" id="fd-daily" min="0.5" max="20" step="0.5" inputmode="decimal"></label>
+        <label class="f">Max. totaal verlies (%)<input type="number" id="fd-max" min="1" max="50" step="0.5" inputmode="decimal"></label>
+      </div>
+      <p class="muted small">Winstdoel 0 = geen doel (al funded). Advies: risico 0,5% tot 1% per trade.</p>
+      <button class="btn ghost" id="fd-reset">Nieuwe challenge starten</button>
+    </div>
+    <p class="warn">Je gegevens worden alleen op dit toestel bewaard. Controleer de echte stand altijd bij je prop firm.</p>
+  </section>
+
+  <section class="tab" id="tab-hist">
+    <div class="card"><h2>Alle signalen</h2><div class="list" id="hist"></div></div>
+  </section>
+
+  <section class="tab" id="tab-bt">
+    <div class="card">
+      <h2>Backtest</h2>
+      <p class="muted small" id="bt-info"></p>
+      <div class="kpis" id="kpis"></div>
+      <svg class="eq" id="eq" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card"><h2>Trades</h2><div class="list" id="trades"></div></div>
+    <p class="warn">Resultaten uit het verleden bieden geen garantie voor de toekomst.</p>
+  </section>
+
+  <section class="tab" id="tab-set">
+    <div class="card">
+      <h2>Snel instellen</h2>
+      <p class="muted small" style="margin:0">⭐ <b>Beste instelling</b>: 4H, alleen BUY, swing 3 candles, R:R 1,0, score vanaf 60. In de backtest de hoogste winrate (±56%) die in beide helften van de data standhield. Geen garantie voor de toekomst.</p>
+      <button class="btn" id="best">⭐ Beste instelling</button>
+      <button class="btn ghost" id="reset">Originele strategie (1H, BUY + SELL)</button>
+    </div>
+    <div class="card">
+      <h2>Risico</h2>
+      <div class="two">
+        <label class="f">Account ($)<input type="number" id="accountSize" min="100" step="500" inputmode="decimal"></label>
+        <label class="f">Risico per trade (%)<input type="number" id="riskPct" min="0.1" max="10" step="0.25" inputmode="decimal"></label>
+      </div>
+      <label class="f">Minimale R:R naar TP1<input type="number" id="minRr" min="0.5" max="5" step="0.1" inputmode="decimal"></label>
+      <label class="f">Signalen
+        <select id="directions">
+          <option value="both">BUY + SELL</option><option value="buy">Alleen BUY</option><option value="sell">Alleen SELL</option>
+        </select>
+      </label>
+    </div>
+    <div class="card">
+      <h2>Strategie</h2>
+      <label class="f">Swing candles links/rechts: <b id="pivotBars-v"></b><input type="range" id="pivotBars" min="2" max="10" step="1"></label>
+      <label class="f">Min. swinggrootte (× ATR): <b id="minSwingAtr-v"></b><input type="range" id="minSwingAtr" min="0.5" max="5" step="0.1"></label>
+      <label class="f">Min. score tonen: <b id="minScore-v"></b><input type="range" id="minScore" min="0" max="100" step="5"></label>
+      <label class="f">Candles in grafiek: <b id="bars-v"></b><input type="range" id="bars" min="100" max="1000" step="50"></label>    </div>
+    <button class="btn ghost" id="open-info" style="margin-bottom:12px">ℹ️ Uitleg van de strategie</button>
+    <div class="card">
+      <h2>Over de data</h2>
+      <p class="muted small">De koers komt van PAX Gold (PAXG/USDT, Binance). Elke PAXG is gedekt door 1 troy ounce goud, dus de prijs volgt XAU/USD heel nauw. Het kan een paar dollar verschillen met je broker. PAXG wordt ook in het weekend verhandeld. De laatste candle die nog niet gesloten is, telt niet mee.</p>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-info">
+    <div class="card">
+      <h2>Zo werkt de strategie</h2>
+      <ol class="info">
+        <li><b>Trend:</b> EMA50 boven EMA200 en de prijs boven EMA200 is een uptrend. Andersom is het een downtrend. Anders komen er geen signalen.</li>
+        <li><b>Swing:</b> de laatste bevestigde top en bodem (5 candles links en rechts), minstens 1,5× ATR groot.</li>
+        <li><b>Fibonacci:</b> 23,6 / 38,2 / 50 / 61,8 / 78,6%. De golden zone ligt tussen 50% en 61,8%.</li>
+        <li><b>Signaal:</b> de prijs raakt de golden zone, sluit niet voorbij 78,6% en er is bevestiging: engulfing, pin bar, RSI-draai of een slot terug voorbij 61,8%.</li>
+        <li><b>Stop-loss:</b> voorbij 78,6% plus 0,5× ATR. Gaat de prijs voorbij 100%, dan vervalt de setup.</li>
+        <li><b>Take-profit:</b> TP1 bij de vorige top/bodem (0%), TP2 bij 127,2%, TP3 bij 161,8%.</li>
+        <li><b>Filter:</b> de R:R naar TP1 moet minstens 1,5 zijn.</li>
+        <li><b>Score (0–100):</b> trendsterkte, het geraakte niveau, de bevestiging, de RSI en een rond getal in de buurt.</li>
+      </ol>
+      <p class="muted small">Backtest: instap op de open van de volgende candle met $0,30 kosten. 1/3 sluit op TP1, 1/3 op TP2 en 1/3 op TP3. Na TP1 gaat de stop naar break-even. Raakt één candle zowel SL als TP, dan telt de SL.</p>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <div class="wrap">
+    <button data-tab="signal" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>Signaal</button>
+    <button data-tab="funded"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>Funded</button>
+    <button data-tab="hist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Historie</button>
+    <button data-tab="bt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Backtest</button>
+    <button data-tab="set"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Instellingen</button>
+  </div>
+</nav>
+
+<script src="lightweight-charts.js"></script>
+<script src="goldfib.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
