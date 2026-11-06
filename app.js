@@ -165,7 +165,9 @@
     { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   // Lightweight Charts toont UTC; schuif de tijd op naar de tijdzone van de gsm.
-  const local = (t) => t - new Date(t * 1000).getTimezoneOffset() * 60;
+  // Eén vaste verschuiving (die van nu) voor alle candles: per candle verschuiven gaf bij de
+  // overgang naar wintertijd twee candles met hetzelfde tijdstip, en dan crashte de grafiek.
+  const local = (t) => t - new Date().getTimezoneOffset() * 60;
 
   // ---- Data -----------------------------------------------------------------
 
@@ -244,7 +246,12 @@
     $("trend").className = `pill ${trend === "Uptrend" ? "up" : trend === "Downtrend" ? "down" : ""}`;
 
     renderSignal(active, ctx, cfg, last, trend);
-    renderChart(candles, cfg, signals, ctx);
+    try {
+      renderChart(candles, cfg, signals, ctx);
+    } catch (e) {
+      if (chart) { chart.remove(); chart = null; }
+      $("chart").innerHTML = `<p class="muted small">Grafiek kon niet getekend worden (${esc(e.message)}).</p>`;
+    }
     renderHistory(signals);
     renderBacktest(candles, signals, cfg);
   }
