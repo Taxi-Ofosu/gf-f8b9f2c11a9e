@@ -44,6 +44,8 @@
   .seg button { flex: 1; border: 0; background: none; color: var(--muted); font: inherit; font-weight: 600;
     padding: 7px 0; border-radius: 8px; cursor: pointer; }
   .seg button.on { background: var(--surface-2); color: var(--gold); }
+  .seg[hidden] { display: none; }
+  #modes { margin-top: 10px; }
   .card { background: var(--surface); border-radius: var(--radius); padding: 16px; margin: 12px 0; }
   .card h2 { margin: 0 0 10px; font-size: 15px; font-weight: 650; }
   .muted { color: var(--muted); }
@@ -123,6 +125,9 @@
     </div>
     <div class="price" id="price">–</div>
     <div class="sub"><span id="chg" class="chg"></span><span id="updated"><span class="spin"></span> laden…</span></div>
+    <div class="seg" id="modes">
+      <button data-mode="fib">Fibonacci</button><button data-mode="breakout">🚀 Breakout</button>
+    </div>
     <div class="seg" id="tfs">
       <button data-tf="15m">15m</button><button data-tf="1H">1H</button>
       <button data-tf="4H">4H</button><button data-tf="1D">1D</button>
@@ -136,12 +141,7 @@
     <div id="signal"></div>
     <div class="card">
       <div id="chart"></div>
-      <div class="legend">
-        <span><i style="background:#60a5fa"></i>EMA50</span>
-        <span><i style="background:#c084fc"></i>EMA200</span>
-        <span><i style="background:var(--gold)"></i>Golden zone 50–61,8%</span>
-        <span>▲▼ signalen</span>
-      </div>
+      <div class="legend" id="legend"></div>
     </div>
     <p class="warn">Geen financieel advies. Alleen voor educatieve doeleinden. Handelen met hefboom is zeer risicovol: test eerst op een demo-account.</p>
   </section>
@@ -201,6 +201,11 @@
       <button class="btn ghost" id="reset">Originele strategie (1H, BUY + SELL)</button>
     </div>
     <div class="card">
+      <h2>🚀 Breakout (1H)</h2>
+      <p class="muted small" style="margin:0">Kopen als goud boven de hoogste koers van de laatste 150 uur sluit, verkopen onder de laagste. Stop 1× ATR, doel 5× ATR. In de test op 2 jaar goud de beste 1H-strategie (±25% winrate, gem. +0,45R per trade). Je krijgt er ook een melding van. Advies: 0,5% risico per trade, want reeksen van 10+ verliezen komen voor.</p>
+      <button class="btn" id="breakout">🚀 Breakout gebruiken</button>
+    </div>
+    <div class="card">
       <h2>Risico</h2>
       <div class="two">
         <label class="f">Account ($)<input type="number" id="accountSize" min="100" step="500" inputmode="decimal"></label>
@@ -241,6 +246,18 @@
       </ol>
       <p class="muted small">Backtest: instap op de open van de volgende candle met $0,30 kosten. 1/3 sluit op TP1, 1/3 op TP2 en 1/3 op TP3. Na TP1 gaat de stop naar break-even. Raakt één candle zowel SL als TP, dan telt de SL.</p>
     </div>
+    <div class="card">
+      <h2>🚀 Zo werkt de breakout</h2>
+      <ol class="info">
+        <li><b>Alleen goud, 1H-candles.</b> Weekenduren tellen niet mee: dan is de goudmarkt dicht (PAXG handelt wel door).</li>
+        <li><b>BUY:</b> een candle sluit boven de hoogste koers van de vorige 150 uur (±1 week). <b>SELL:</b> sluit onder de laagste koers.</li>
+        <li><b>Instap:</b> meteen na het sluiten van die candle.</li>
+        <li><b>Stop-loss:</b> 1× ATR(14) van je instap. <b>Take-profit:</b> 5× ATR.</li>
+        <li><b>Tijdslimiet:</b> na 96 handelsuren (4 dagen) zonder SL of TP sluit je de trade.</li>
+        <li><b>Eén trade tegelijk:</b> uitbraken tijdens een lopende trade tellen niet.</li>
+      </ol>
+      <p class="muted small">Ongeveer 1 op 4 trades wint, maar dan met 5× je risico. Verliesreeksen van 10 tot 15 trades kwamen in de test voor. Riskeer daarom 0,5% per trade, zeker bij een funded account. De meldingen gaan via ntfy, net als bij de andere signalen.</p>
+    </div>
   </section>
 </main>
 
@@ -256,6 +273,7 @@
 
 <script src="lightweight-charts.js"></script>
 <script src="goldfib.js"></script>
+<script src="breakout.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

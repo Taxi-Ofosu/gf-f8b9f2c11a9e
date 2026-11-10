@@ -2,6 +2,7 @@
 (function () {
   "use strict";
   const G = window.GoldFib;
+  const B = window.Breakout;
 
   // timeframe -> [Binance-interval, aantal candles, candle-duur in seconden]
   const TIMEFRAMES = {
@@ -24,11 +25,13 @@
   // beide helften van de data standhield.
   const BEST = { tf: "4H", minRr: 1.0, directions: "buy", pivotBars: 3, minSwingAtr: 1.5, minScore: 60 };
   const SETTING_DEFAULTS = {
-    ...BEST, accountSize: G.DEFAULTS.accountSize, riskPct: G.DEFAULTS.riskPct, bars: 300,
+    ...BEST, mode: "fib", accountSize: G.DEFAULTS.accountSize, riskPct: G.DEFAULTS.riskPct, bars: 300,
   };
   const STORE_KEY = "goudfib.settings";
 
   const $ = (id) => document.getElementById(id);
+  // Breakout werkt altijd op 1H; Fibonacci op het gekozen timeframe.
+  const curTf = () => (settings.mode === "breakout" ? "1H" : settings.tf);
   const cache = {};           // tf -> candles
   let settings = loadSettings();
   let chart = null;
@@ -206,12 +209,12 @@
   async function load(refresh = false) {
     if (loading) return;
     loading = true;
-    const tf = settings.tf;
+    const tf = curTf();
     const before = cache[tf] ? cache[tf][cache[tf].length - 1].time : null;
     $("updated").innerHTML = '<span class="spin"></span> laden…';
     try {
       const candles = await getCandles(tf, refresh);
-      if (tf !== settings.tf) return;
+      if (tf !== curTf()) return;
       const last = candles[candles.length - 1].time;
       if (!refresh || last !== before) render(candles);
       $("updated").textContent = `bijgewerkt ${new Date().toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit" })}`;
@@ -222,13 +225,14 @@
       }
     } finally {
       loading = false;
-      if (tf !== settings.tf) load(!!cache[settings.tf]); // ondertussen ander timeframe gekozen
+      if (tf !== curTf()) load(!!cache[curTf()]); // ondertussen ander timeframe gekozen
     }
   }
 
   // ---- Weergave -------------------------------------------------------------
 
   function render(candles) {
+    if (settings.mode === "breakout") { renderBreakout(candles); return; }
     const cfg = config();
     const n = candles.length;
     const signals = G.findSignals(candles, cfg).filter((s) => s.score >= settings.minScore);
@@ -239,12 +243,15 @@
     // Kop
     $("price").textContent = `$${fmt(last.close)}`;
     const chg = last.close - candles[n - 2].close;
-    $("chg").textContent = `${chg >= 0 ? "+" : ""}${fmt(chg)} (${settings.tf})`;
+    $("chg").textContent = `${chg >= 0 ? "+" : ""}${fmt(chg)} (${curTf()})`;
     $("chg").className = `chg ${chg >= 0 ? "up" : "down"}`;
     const trend = G.trendLabel(candles, cfg);
     $("trend").textContent = trend;
     $("trend").className = `pill ${trend === "Uptrend" ? "up" : trend === "Downtrend" ? "down" : ""}`;
 
+    $("legend").innerHTML = `<span><i style="background:#60a5fa"></i>EMA50</span>
+        <span><i style="background:#c084fc"></i>EMA200</span>
+        <span><i style="background:var(--gold)"></i>Golden zone 50–61,8%</span><span>▲▼ signalen</span>`;
     renderSignal(active, ctx, cfg, last, trend);
     try {
       renderChart(candles, cfg, signals, ctx);
@@ -275,7 +282,7 @@
         <div class="card signal ${buy ? "buy" : "sell"}">
           <div class="sig-head">
             <div><div class="sig-dir">${buy ? "▲ BUY" : "▼ SELL"}</div>
-              <div class="muted small">${fmtTime(sig.time)} · ${settings.tf}</div></div>
+              <div class="muted small">${fmtTime(sig.time)} · ${curTf()}</div></div>
             <div class="score"><b>${sig.score}</b><span class="muted">/100</span><div class="muted small">score</div></div>
           </div>
           <div class="grid">
@@ -327,7 +334,7 @@
       layout: { background: { type: "solid", color: "#1a1c20" }, textColor: "#9aa1ab", fontSize: 11 },
       grid: { vertLines: { color: "#22252a" }, horzLines: { color: "#22252a" } },
       rightPriceScale: { borderColor: "#2e3238" },
-      timeScale: { borderColor: "#2e3238", timeVisible: settings.tf !== "1D", rightOffset: 4 },
+      timeScale: { borderColor: "#2e3238", timeVisible: curTf() !== "1D", rightOffset: 4 },
       crosshair: { mode: 0 },
     });
     const series = chart.addCandlestickSeries({
@@ -381,23 +388,7 @@
       </div>`).join("");
   }
 
-  function renderBacktest(candles, signals, cfg) {
-    const bt = G.simulate(candles, signals, cfg);
-    const s = bt.stats;
-    const d = (t) => new Date(t * 1000).toLocaleDateString("nl-BE");
-    $("bt-info").textContent = `Periode ${d(candles[0].time)} t/m ${d(candles[candles.length - 1].time)} (${settings.tf}, ${candles.length} candles), ${fmt(cfg.riskPct)}% risico per trade.`;
-    const kpi = (k, v, cls = "") => `<div class="kv"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`;
-    const sign = (v, dd = 2) => `${v >= 0 ? "+" : ""}${fmt(v, dd)}`;
-    $("kpis").innerHTML = [
-      kpi("Trades", s.trades),
-      kpi("Winrate", `${fmt(s.winrate, 1)}%`),
-      kpi("Gem. R", sign(s.avgR), s.avgR >= 0 ? "r-pos" : "r-neg"),
-      kpi("Profit factor", Number.isFinite(s.profitFactor) ? fmt(s.profitFactor) : "∞"),
-      kpi("Rendement", `${sign(s.returnPct, 1)}%`, s.returnPct >= 0 ? "r-pos" : "r-neg"),
-      kpi("Max drawdown", `${fmt(s.maxDrawdown, 1)}%`),
-    ].join("");
-
-    const eq = bt.equity;
+  function drawEquity(eq) {
     const svg = $("eq");
     if (eq.length > 1) {
       const W = 300, H = 100;
@@ -411,6 +402,25 @@
     } else {
       svg.innerHTML = "";
     }
+  }
+
+  function renderBacktest(candles, signals, cfg) {
+    const bt = G.simulate(candles, signals, cfg);
+    const s = bt.stats;
+    const d = (t) => new Date(t * 1000).toLocaleDateString("nl-BE");
+    $("bt-info").textContent = `Periode ${d(candles[0].time)} t/m ${d(candles[candles.length - 1].time)} (${curTf()}, ${candles.length} candles), ${fmt(cfg.riskPct)}% risico per trade.`;
+    const kpi = (k, v, cls = "") => `<div class="kv"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`;
+    const sign = (v, dd = 2) => `${v >= 0 ? "+" : ""}${fmt(v, dd)}`;
+    $("kpis").innerHTML = [
+      kpi("Trades", s.trades),
+      kpi("Winrate", `${fmt(s.winrate, 1)}%`),
+      kpi("Gem. R", sign(s.avgR), s.avgR >= 0 ? "r-pos" : "r-neg"),
+      kpi("Profit factor", Number.isFinite(s.profitFactor) ? fmt(s.profitFactor) : "∞"),
+      kpi("Rendement", `${sign(s.returnPct, 1)}%`, s.returnPct >= 0 ? "r-pos" : "r-neg"),
+      kpi("Max drawdown", `${fmt(s.maxDrawdown, 1)}%`),
+    ].join("");
+
+    drawEquity(bt.equity);
 
     $("trades").innerHTML = bt.trades.length ? bt.trades.slice().reverse().slice(0, 100).map((t) => `
       <div class="row">
@@ -420,10 +430,213 @@
       </div>`).join("") : '<p class="muted small">Geen trades in deze periode.</p>';
   }
 
+  // ---- Breakout (1H) --------------------------------------------------------
+
+  function sizingHtml(entry, sl, cfg) {
+    const stop = Math.abs(entry - sl);
+    if (fd.on) {
+      const f = fundedState();
+      if (f.safeRisk <= 0) return `<b>Funded: niet traden.</b> <span class="muted">${f.status}</span>`;
+      const lots = G.positionSize(f.balance, f.safeRisk / f.balance * 100, entry, sl, cfg.ozPerLot);
+      return `<b>Positie (funded):</b> ${fmt(lots)} lot
+        <span class="muted">(risico ≈ $${fmt(f.safeRisk, 0)} van saldo $${fmt(f.balance, 0)}, stop ${fmt(stop)} $/oz)</span>`;
+    }
+    const lots = G.positionSize(cfg.accountSize, cfg.riskPct, entry, sl, cfg.ozPerLot);
+    return `<b>Positie:</b> ${fmt(lots)} lot
+      <span class="muted">(risico ≈ $${fmt(cfg.accountSize * cfg.riskPct / 100, 0)} = ${fmt(cfg.riskPct, 2)}% van $${fmt(cfg.accountSize, 0)}, stop ${fmt(stop)} $/oz)</span>`;
+  }
+
+  function renderBreakout(all) {
+    const cfg = config();
+    const candles = B.dropWeekend(all);
+    const n = candles.length;
+    const sigs = B.findBreakouts(candles);
+    const bt = B.simulate(candles, sigs, cfg.accountSize, cfg.riskPct);
+    const last = all[all.length - 1];
+    const { hi, lo } = B.range(candles);
+
+    $("price").textContent = `$${fmt(last.close)}`;
+    const chg = last.close - all[all.length - 2].close;
+    $("chg").textContent = `${chg >= 0 ? "+" : ""}${fmt(chg)} (1H)`;
+    $("chg").className = `chg ${chg >= 0 ? "up" : "down"}`;
+    const closedNow = B.marketClosed(Date.now() / 1000);
+    $("trend").textContent = closedNow ? "Markt dicht" : "Breakout 1H";
+    $("trend").className = "pill";
+
+    // Nieuw signaal op de laatste gesloten candle: er is nog geen volgende candle, dus het zit nog
+    // niet in de backtest. Het telt alleen als er geen vorige trade meer liep.
+    const newest = sigs.length ? sigs[sigs.length - 1] : null;
+    const prev = bt.trades.length ? bt.trades[bt.trades.length - 1] : null;
+    const pending = newest && newest.bar === n - 1 && !(prev && prev.exitTime >= newest.time) ? newest : null;
+    const open = bt.trades.find((t) => t.open) || null;
+
+    let html;
+    if (pending) {
+      const buy = pending.direction === "BUY";
+      const entry = pending.close + (buy ? B.BO.cost : -B.BO.cost);
+      const { sl, tp } = B.plan(pending, entry);
+      html = `
+        <div class="card signal ${buy ? "buy" : "sell"}">
+          <div class="sig-head">
+            <div><div class="sig-dir">${buy ? "▲ BUY" : "▼ SELL"}</div>
+              <div class="muted small">Breakout · candle van ${fmtTime(pending.time)} · 1H</div></div>
+            <div class="score"><b>NU</b><div class="muted small">instappen</div></div>
+          </div>
+          <div class="grid">
+            <div class="kv"><div class="k">Entry ±</div><div class="v">${fmt(entry)}</div></div>
+            <div class="kv sl"><div class="k">Stop-loss</div><div class="v">${fmt(sl)}</div></div>
+            <div class="kv tp"><div class="k">Take-profit</div><div class="v">${fmt(tp)}</div></div>
+          </div>
+          <p class="small" style="margin:12px 0 0">${sizingHtml(entry, sl, cfg)}</p>
+          <ul class="why small">
+            <li>Goud sloot ${buy ? "boven de hoogste" : "onder de laagste"} koers van de laatste ${B.BO.lookback} uur (${fmt(pending.level)}).</li>
+            <li>Stop-loss = 1× ATR (${fmt(pending.atr)} $), take-profit = 5× ATR. Wijkt je instap af? Houd dezelfde afstanden aan.</li>
+            <li>Na 4 handelsdagen nog open? Dan sluiten.</li>
+          </ul>
+        </div>`;
+    } else if (open) {
+      const buy = open.direction === "BUY";
+      const age = n - candles.findIndex((c) => c.time === open.entryTime); // handelsuren sinds instap
+      const nowR = (last.close - open.entry) * (buy ? 1 : -1) / Math.abs(open.entry - open.sl);
+      html = `
+        <div class="card signal ${buy ? "buy" : "sell"}">
+          <div class="sig-head">
+            <div><div class="sig-dir">${buy ? "▲" : "▼"} Lopende trade</div>
+              <div class="muted small">Breakout ${open.direction} · instap ${fmtTime(open.entryTime)}</div></div>
+            <div class="score"><b class="${nowR >= 0 ? "r-pos" : "r-neg"}">${nowR >= 0 ? "+" : ""}${fmt(nowR)}R</b><div class="muted small">nu</div></div>
+          </div>
+          <div class="grid">
+            <div class="kv"><div class="k">Entry</div><div class="v">${fmt(open.entry)}</div></div>
+            <div class="kv sl"><div class="k">Stop-loss</div><div class="v">${fmt(open.sl)}</div></div>
+            <div class="kv tp"><div class="k">Take-profit</div><div class="v">${fmt(open.tp)}</div></div>
+          </div>
+          <p class="small" style="margin:12px 0 0">${age > 3
+            ? "Dit signaal is al ouder dan 3 uur: <b>niet meer instappen</b>. Zit je erin? Laat SL en TP staan."
+            : sizingHtml(open.entry, open.sl, cfg)}</p>
+          <p class="small muted" style="margin:8px 0 0">Nog ${Math.max(B.BO.maxBars - age, 0)} handelsuren tot de tijdslimiet. Nieuwe uitbraken tellen pas weer als deze trade gesloten is.</p>
+        </div>`;
+    } else {
+      html = `<div class="card"><h2>Geen breakout</h2>
+        <p class="small muted" style="margin:0 0 8px">Signaal zodra een 1H-candle sluit:</p>
+        <div class="grid" style="grid-template-columns:1fr 1fr">
+          <div class="kv tp"><div class="k">▲ BUY boven</div><div class="v">${fmt(hi)}</div></div>
+          <div class="kv sl"><div class="k">▼ SELL onder</div><div class="v">${fmt(lo)}</div></div>
+        </div>
+        <p class="small muted" style="margin:8px 0 0">Nog ${fmt(Math.max(hi - last.close, 0))} $ omhoog of ${fmt(Math.max(last.close - lo, 0))} $ omlaag
+          (hoogste en laagste koers van de laatste ${B.BO.lookback} handelsuren).
+          ${closedNow ? "<br><b>De goudmarkt is nu dicht (weekend).</b> Weekenduren tellen niet mee." : ""}</p></div>`;
+    }
+    $("signal").innerHTML = html;
+    $("legend").innerHTML = `<span><i style="background:#22c55e"></i>Hoogste ${B.BO.lookback} uur</span>
+      <span><i style="background:#ef4444"></i>Laagste ${B.BO.lookback} uur</span><span>▲▼ breakouts</span>`;
+
+    try {
+      renderBreakoutChart(candles, bt, pending, open);
+    } catch (e) {
+      if (chart) { chart.remove(); chart = null; }
+      $("chart").innerHTML = `<p class="muted small">Grafiek kon niet getekend worden (${esc(e.message)}).</p>`;
+    }
+
+    // Historie
+    const items = bt.trades.slice().reverse();
+    $("hist").innerHTML = (pending ? `
+      <div class="row"><div class="row-top"><span class="${pending.direction === "BUY" ? "b" : "s"}">${pending.direction === "BUY" ? "▲" : "▼"} ${pending.direction} · nieuw</span>
+        <span class="muted small">${fmtTime(pending.time)}</span></div>
+        <div class="small">Uitbraak door ${fmt(pending.level)}</div></div>` : "")
+      + (items.length ? items.map((t) => `
+      <div class="row">
+        <div class="row-top"><span class="${t.direction === "BUY" ? "b" : "s"}">${t.direction === "BUY" ? "▲" : "▼"} ${t.direction} · ${t.open ? "loopt" : esc(t.outcome)}</span>
+          <span class="muted small">${fmtTime(t.signalTime)}</span></div>
+        <div class="small">Entry ${fmt(t.entry)} · SL ${fmt(t.sl)} · TP ${fmt(t.tp)}</div>
+        <div class="small muted">Uitbraak door ${fmt(t.signal.level)} · ${t.open ? "nog open" : `${t.r >= 0 ? "+" : ""}${fmt(t.r)} R`}</div>
+      </div>`).join("") : '<p class="muted small">Nog geen breakouts in deze data.</p>');
+
+    // Backtest
+    const s = bt.stats;
+    const d = (t) => new Date(t * 1000).toLocaleDateString("nl-BE");
+    $("bt-info").textContent = `Breakout 1H · periode ${d(candles[0].time)} t/m ${d(candles[n - 1].time)} (${n} handelsuren, zonder weekend), ${fmt(cfg.riskPct)}% risico per trade, $${fmt(B.BO.cost)} kosten.`;
+    const kpi = (k, v, cls = "") => `<div class="kv"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`;
+    const sign = (v, dd = 2) => `${v >= 0 ? "+" : ""}${fmt(v, dd)}`;
+    $("kpis").innerHTML = [
+      kpi("Trades", s.trades),
+      kpi("Winrate", `${fmt(s.winrate, 1)}%`),
+      kpi("Gem. R", sign(s.avgR), s.avgR >= 0 ? "r-pos" : "r-neg"),
+      kpi("Totaal R", sign(s.totalR, 1), s.totalR >= 0 ? "r-pos" : "r-neg"),
+      kpi("Rendement", `${sign(s.returnPct, 1)}%`, s.returnPct >= 0 ? "r-pos" : "r-neg"),
+      kpi("Max drawdown", `${fmt(s.maxDrawdown, 1)}%`),
+      kpi("Profit factor", Number.isFinite(s.profitFactor) ? fmt(s.profitFactor) : "∞"),
+      kpi("Verliesreeks", s.worstStreak),
+      kpi("Per maand", fmt(s.trades / Math.max((candles[n - 1].time - candles[0].time) / 2629800, 1), 1)),
+    ].join("");
+    drawEquity(bt.equity);
+    $("trades").innerHTML = bt.trades.length ? bt.trades.slice().reverse().slice(0, 100).map((t) => `
+      <div class="row">
+        <div class="row-top"><span class="${t.direction === "BUY" ? "b" : "s"}">${t.direction} · ${t.open ? "loopt" : esc(t.outcome)}</span>
+          <span class="${t.r >= 0 ? "r-pos" : "r-neg"}">${sign(t.r)} R</span></div>
+        <div class="small muted">${fmtTime(t.entryTime)} → ${fmtTime(t.exitTime)} · entry ${fmt(t.entry)}</div>
+      </div>`).join("") : '<p class="muted small">Geen trades in deze periode.</p>';
+  }
+
+  function renderBreakoutChart(candles, bt, pending, open) {
+    const el = $("chart");
+    if (chart) { chart.remove(); chart = null; }
+    if (!window.LightweightCharts) {
+      el.innerHTML = '<p class="muted small">Grafiek kon niet laden (geen internet?).</p>';
+      return;
+    }
+    const view = candles.slice(-settings.bars);
+    const offset = candles.length - view.length;
+    const start = view[0].time;
+    chart = LightweightCharts.createChart(el, {
+      autoSize: true,
+      layout: { background: { type: "solid", color: "#1a1c20" }, textColor: "#9aa1ab", fontSize: 11 },
+      grid: { vertLines: { color: "#22252a" }, horzLines: { color: "#22252a" } },
+      rightPriceScale: { borderColor: "#2e3238" },
+      timeScale: { borderColor: "#2e3238", timeVisible: true, rightOffset: 4 },
+      crosshair: { mode: 0 },
+    });
+    const series = chart.addCandlestickSeries({
+      upColor: "#22c55e", downColor: "#ef4444", borderVisible: false,
+      wickUpColor: "#22c55e", wickDownColor: "#ef4444",
+    });
+    series.setData(view.map((c) => ({ ...c, time: local(c.time) })));
+    // Kanaal: hoogste/laagste van de vorige 150 candles = de grens die gebroken moet worden.
+    const hiLine = [], loLine = [];
+    for (let i = 0; i < view.length; i++) {
+      const t = offset + i;
+      if (t < B.BO.lookback) continue;
+      const r = B.range(candles, t);
+      hiLine.push({ time: local(view[i].time), value: r.hi });
+      loLine.push({ time: local(view[i].time), value: r.lo });
+    }
+    for (const [data, color] of [[hiLine, "#22c55e"], [loLine, "#ef4444"]]) {
+      const line = chart.addLineSeries({ color, lineWidth: 1, lineStyle: 2, priceLineVisible: false,
+        lastValueVisible: false, crosshairMarkerVisible: false });
+      line.setData(data);
+    }
+    const marks = bt.trades.map((t) => t.signal).concat(pending ? [pending] : []).filter((x) => x.time >= start);
+    series.setMarkers(marks.map((x) => x.direction === "BUY"
+      ? { time: local(x.time), position: "belowBar", color: "#22c55e", shape: "arrowUp", text: "" }
+      : { time: local(x.time), position: "aboveBar", color: "#ef4444", shape: "arrowDown", text: "" }));
+    let show = open;
+    if (!show && pending) {
+      const entry = pending.close + (pending.direction === "BUY" ? B.BO.cost : -B.BO.cost);
+      show = { entry, ...B.plan(pending, entry) };
+    }
+    if (show) {
+      series.createPriceLine({ price: show.entry, color: "#e8b64c", lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: "entry" });
+      series.createPriceLine({ price: show.sl, color: "#f87171", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "SL" });
+      series.createPriceLine({ price: show.tp, color: "#22c55e", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "TP" });
+    }
+    chart.timeScale().fitContent();
+  }
+
   // ---- Bediening ------------------------------------------------------------
 
   function syncControls() {
     document.querySelectorAll("#tfs button").forEach((b) => b.classList.toggle("on", b.dataset.tf === settings.tf));
+    document.querySelectorAll("#modes button").forEach((b) => b.classList.toggle("on", b.dataset.mode === settings.mode));
+    $("tfs").hidden = settings.mode === "breakout";
     for (const id of ["accountSize", "riskPct", "minRr", "directions", "pivotBars", "minSwingAtr", "minScore", "bars"]) {
       $(id).value = settings[id];
       if ($(`${id}-v`)) $(`${id}-v`).textContent = settings[id];
@@ -431,7 +644,7 @@
   }
 
   function rerender() {
-    const candles = cache[settings.tf];
+    const candles = cache[curTf()];
     if (candles) render(candles);
   }
 
@@ -442,6 +655,16 @@
     syncControls();
     if (cache[settings.tf]) { rerender(); load(true); } else load();
   }));
+
+  function setMode(mode) {
+    if (mode === settings.mode) return;
+    settings.mode = mode;
+    saveSettings();
+    syncControls();
+    if (cache[curTf()]) { rerender(); load(true); } else load();
+  }
+  document.querySelectorAll("#modes button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
+  $("breakout").addEventListener("click", () => { setMode("breakout"); showTab("signal"); });
 
   function showTab(name) {
     document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x.dataset.tab === name));
@@ -495,12 +718,12 @@
   }
 
   function applyPreset(preset) {
-    const tfChanged = preset.tf !== settings.tf;
-    settings = { ...settings, ...preset };
+    const tfChanged = preset.tf !== curTf();
+    settings = { ...settings, ...preset, mode: "fib" };
     saveSettings();
     syncControls();
     if (!tfChanged) rerender();
-    else if (cache[settings.tf]) { rerender(); load(true); } else load();
+    else if (cache[curTf()]) { rerender(); load(true); } else load();
   }
 
   $("best").addEventListener("click", () => applyPreset(BEST));
@@ -509,7 +732,7 @@
   // Elke minuut kijken of er een nieuwe candle gesloten is, zolang de app open staat.
   setInterval(() => { if (document.visibilityState === "visible") load(true); }, 60000);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && cache[settings.tf]) load(true);
+    if (document.visibilityState === "visible" && cache[curTf()]) load(true);
   });
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

@@ -1,5 +1,5 @@
 /* Service worker: de app opent ook bij slechte verbinding (eerst netwerk, anders de laatste versie). */
-const CACHE = "goudfib-v2";
+const CACHE = "goudfib-v3";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
